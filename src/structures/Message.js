@@ -449,7 +449,7 @@ class Message extends Base {
 
         const result = await this.client.pupPage.evaluate(async (msgId) => {
             const msg = window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
-            if (!msg || !msg.mediaData) {
+            if (!msg || !msg.mediaData || msg.mediaData.mediaStage === 'REUPLOADING') {
                 return null;
             }
             if (msg.mediaData.mediaStage != 'RESOLVED') {
