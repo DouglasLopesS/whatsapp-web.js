@@ -757,8 +757,29 @@ class Client extends EventEmitter {
                 window.Store.Conn.on('change:battery', (state) => { window.onBatteryStateChangedEvent(state); });
             }
 
-            // Incoming call listener
-            window.Store.Call.on('add', (call) => { window.onIncomingCall(call); });
+            // Incoming call listener.
+            // Some WA builds expose Store.Call after this bootstrap block runs.
+            const bindIncomingCallListener = () => {
+                if (window.__wwebjsCallAddListenerBound) return true;
+
+                const callStore = window.Store?.Call;
+                if (!callStore || typeof callStore.on !== 'function') return false;
+
+                callStore.on('add', (call) => { window.onIncomingCall(call); });
+                window.__wwebjsCallAddListenerBound = true;
+                return true;
+            };
+
+            if (!bindIncomingCallListener()) {
+                let attempts = 0;
+                const maxAttempts = 40; // retry for ~10s
+                const interval = setInterval(() => {
+                    attempts += 1;
+                    if (bindIncomingCallListener() || attempts >= maxAttempts) {
+                        clearInterval(interval);
+                    }
+                }, 250);
+            }
 
             // Fallback for WA builds where Store.Call is not exposed.
             // Emits call events from call_log messages.
