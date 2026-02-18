@@ -758,8 +758,44 @@ class Client extends EventEmitter {
             }
 
             // Incoming call listener
-            if (window.Store.Call) {
+            if (window.Store.Call && typeof window.Store.Call.on === 'function') {
                 window.Store.Call.on('add', (call) => { window.onIncomingCall(call); });
+            }
+
+            // Fallback for WA builds where Store.Call is not exposed.
+            // Emits call events from call_log messages.
+            if (window.Store.Msg && typeof window.Store.Msg.on === 'function') {
+                if (!window.__wwebjsSeenCallLogIds) {
+                    window.__wwebjsSeenCallLogIds = new Set();
+                }
+
+                const emitCallFromLog = (msgModel) => {
+                    if (!msgModel || msgModel.type !== 'call_log') return;
+                    if (msgModel?.id?.fromMe) return;
+
+                    const callId = msgModel?.id?.id || msgModel?.id?._serialized || `${msgModel.timestamp || Date.now()}`;
+                    if (window.__wwebjsSeenCallLogIds.has(callId)) return;
+                    window.__wwebjsSeenCallLogIds.add(callId);
+
+                    window.onIncomingCall({
+                        id: callId,
+                        peerJid: msgModel.from || msgModel?.id?.remote,
+                        offerTime: msgModel.timestamp,
+                        isVideo: msgModel.callType === 'video' || msgModel.subtype === 'video',
+                        isGroup: (msgModel.from || '').endsWith('@g.us'),
+                        canHandleLocally: false,
+                        outgoing: false,
+                        webClientShouldHandle: false,
+                        participants: msgModel.participants || null
+                    });
+                };
+
+                window.Store.Msg.on('add', (msg) => {
+                    emitCallFromLog(window.WWebJS.getMessageModel(msg));
+                });
+                window.Store.Msg.on('change:type', (msg) => {
+                    emitCallFromLog(window.WWebJS.getMessageModel(msg));
+                });
             }
 
             // Chat event listeners
