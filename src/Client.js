@@ -758,16 +758,61 @@ class Client extends EventEmitter {
             }
 
             // Incoming call listener.
-            // Some WA builds expose Store.Call after this bootstrap block runs.
+            // Some WA builds expose call stores after this bootstrap block runs.
+            const normalizeIncomingCall = (call) => {
+                const id = call?.id?._serialized || call?.id?.id || call?.id || `${Date.now()}`;
+                const peerJid = call?.peerJid?._serialized || call?.peerJid || call?.from?._serialized || call?.from || null;
+                const offerTime = call?.offerTime ?? call?.t ?? Math.floor(Date.now() / 1000);
+                const participants = Array.isArray(call?.participants)
+                    ? call.participants.map((p) => p?._serialized || p).filter(Boolean)
+                    : (call?.participants || null);
+
+                return {
+                    id,
+                    peerJid,
+                    offerTime,
+                    isVideo: Boolean(call?.isVideo || call?.video || call?.isVideoCall),
+                    isGroup: Boolean(call?.isGroup || (peerJid && peerJid.endsWith('@g.us'))),
+                    canHandleLocally: Boolean(call?.canHandleLocally),
+                    outgoing: Boolean(call?.outgoing || call?.isOutgoing),
+                    webClientShouldHandle: Boolean(call?.webClientShouldHandle),
+                    participants
+                };
+            };
+
+            const onCallAdded = (call) => {
+                try {
+                    window.onIncomingCall(normalizeIncomingCall(call));
+                } catch (err) {
+                    console.warn('[wwebjs] Failed to emit incoming call event', err);
+                }
+            };
+
             const bindIncomingCallListener = () => {
-                if (window.__wwebjsCallAddListenerBound) return true;
+                if (!window.__wwebjsBoundCallStores) {
+                    window.__wwebjsBoundCallStores = new WeakSet();
+                }
 
-                const callStore = window.Store?.Call;
-                if (!callStore || typeof callStore.on !== 'function') return false;
+                const candidates = [
+                    window.Store?.Call,
+                    window.Store?.CallCollection,
+                    window.Store?.Calls
+                ].filter(Boolean);
 
-                callStore.on('add', (call) => { window.onIncomingCall(call); });
-                window.__wwebjsCallAddListenerBound = true;
-                return true;
+                let boundAny = false;
+                for (const callStore of candidates) {
+                    if (typeof callStore?.on !== 'function') continue;
+                    if (window.__wwebjsBoundCallStores.has(callStore)) {
+                        boundAny = true;
+                        continue;
+                    }
+
+                    callStore.on('add', onCallAdded);
+                    window.__wwebjsBoundCallStores.add(callStore);
+                    boundAny = true;
+                }
+
+                return boundAny;
             };
 
             if (!bindIncomingCallListener()) {
