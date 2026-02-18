@@ -758,9 +758,7 @@ class Client extends EventEmitter {
             }
 
             // Incoming call listener
-            if (window.Store.Call && typeof window.Store.Call.on === 'function') {
-                window.Store.Call.on('add', (call) => { window.onIncomingCall(call); });
-            }
+            window.Store.Call.on('add', (call) => { window.onIncomingCall(call); });
 
             // Fallback for WA builds where Store.Call is not exposed.
             // Emits call events from call_log messages.
