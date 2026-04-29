@@ -758,9 +758,37 @@ class Client extends EventEmitter {
             }
 
             // Incoming call listener
-            const callCollection = (window.Store && window.Store.Call) || (window.Store && window.Store.WAWebCallCollection);
-            if (callCollection && typeof callCollection.on === 'function') {
-                callCollection.on('add', (call) => { window.onIncomingCall(call); });
+            // Newer WhatsApp Web builds do not emit the legacy collection "add" event
+            // for calls anymore, so we hook into the internal call map updates instead.
+            const WAWebCallCollection = (window.Store && window.Store.WAWebCallCollection)
+                || (typeof window.require === 'function' ? window.require('WAWebCallCollection') : null);
+
+            if (WAWebCallCollection && !window.__wwebjsIncomingCallPatched) {
+                const mapKey = Object.keys(WAWebCallCollection).find((key) => WAWebCallCollection[key] instanceof Map);
+                const internalCallMap = mapKey ? WAWebCallCollection[mapKey] : null;
+
+                if (internalCallMap && typeof internalCallMap.set === 'function') {
+                    const originalMapSet = internalCallMap.set.bind(internalCallMap);
+
+                    internalCallMap.set = function(key, value) {
+                        if (value && !value.outgoing) {
+                            window.onIncomingCall({
+                                id: value.id,
+                                peerJid: value.peerJid,
+                                isVideo: value.isVideo,
+                                isGroup: value.isGroup,
+                                canHandleLocally: value.canHandleLocally,
+                                outgoing: value.outgoing,
+                                webClientShouldHandle: value.webClientShouldHandle,
+                                participants: value.participants,
+                            });
+                        }
+
+                        return originalMapSet(key, value);
+                    };
+
+                    window.__wwebjsIncomingCallPatched = true;
+                }
             }
 
             // Fallback for WA builds where Store.Call is not exposed.
