@@ -1693,6 +1693,9 @@ declare namespace WAWebJS {
         /** Indicates if the Chat is pinned */
         pinned: boolean,
 
+        /** Indicates if the Chat is locked */
+        isLocked: boolean,
+
         /** Archives this chat */
         archive: () => Promise<void>,
         /** Pins this chat and returns its new Pin state */
