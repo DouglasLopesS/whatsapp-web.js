@@ -316,12 +316,7 @@ declare namespace WAWebJS {
         on(event: 'auth_failure', listener: (message: string) => void): this
 
         /** Emitted when authentication is successful */
-        on(event: 'authenticated', listener: (
-            /** 
-             * Object containing session information, when using LegacySessionAuth. Can be used to restore the session
-             */
-            session?: ClientSession
-        ) => void): this
+        on(event: 'authenticated', listener: () => void): this
 
         /** 
          * Emitted when the battery percentage for the attached device changes
@@ -574,7 +569,7 @@ declare namespace WAWebJS {
         /** 
          * @deprecated Only here for backwards-compatibility. You should move to using LocalAuth, or set the authStrategy to LegacySessionAuth explicitly.  
          */
-        session?: ClientSession
+        session?: any
         /** If another whatsapp web session is detected (another browser), take over the session in the current browser
          * @default false */
         takeoverOnConflict?: boolean,
@@ -697,22 +692,12 @@ declare namespace WAWebJS {
      */
      export class LegacySessionAuth extends AuthStrategy {
         constructor(options?: {
-            session?: ClientSession,
+            session?: any,
             restartOnAuthFail?: boolean,
         })
     }
 
-    /** 
-     * Represents a WhatsApp client session
-     */
-    export interface ClientSession {
-        WABrowserId: string,
-        WASecretBundle: string,
-        WAToken1: string,
-        WAToken2: string,
-    }
-
-    /** 
+    /**
      * @deprecated
      */
     export interface BatteryInfo {

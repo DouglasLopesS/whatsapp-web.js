@@ -29,6 +29,7 @@ function getSessionFromEnv() {
     }
 }
 
+
 function createClient({authenticated, options: additionalOpts}={}) {
     const options = {};
 
