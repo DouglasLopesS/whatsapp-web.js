@@ -303,7 +303,7 @@ class Channel extends Base {
 
             if (searchOptions && searchOptions.limit > 0) {
                 while (msgs.length < searchOptions.limit) {
-                    const loadedMessages = await window.Store.ConversationMsgs.loadEarlierMsgs(channel);
+                    const loadedMessages = await (window.require('WAWebChatLoadMessages')).loadEarlierMsgs(channel);
                     if (!loadedMessages || !loadedMessages.length) break;
                     msgs = [...loadedMessages.filter(msgFilter), ...msgs];
                 }
@@ -350,7 +350,7 @@ class Channel extends Base {
                     : null;
             }
             try {
-                await window.Store.ChannelUtils.editNewsletterMetadataAction(channel, property, value);
+                await (window.require('WAWebEditNewsletterMetadataAction')).editNewsletterMetadataAction(channel, property, value);
                 return true;
             } catch (err) {
                 if (err.name === 'ServerStatusCodeError') return false;
@@ -367,9 +367,12 @@ class Channel extends Base {
     async _muteUnmuteChannel(action) {
         return await this.client.pupPage.evaluate(async (channelId, action) => {
             try {
-                action === 'MUTE'
-                    ? await window.Store.ChannelUtils.muteNewsletter([channelId])
-                    : await window.Store.ChannelUtils.unmuteNewsletter([channelId]);
+                await (window.require('WAWebNewsletterUpdateUserSettingJob')).updateNewsletterUserSetting({
+                    newsletterJid: window.require('WAJids').toNewsLetterJid(channelId),
+                    type: window.require('WAWebNewsletterModelUtils').ADMIN_NOTIFICATIONS,
+                    muteExpirationValue: action === 'MUTE' ? window.require('WAWebNewsletterModelUtils').MUTED_STATE :
+                        window.require('WAWebNewsletterModelUtils').UNMUTED_STATE
+                });
                 return true;
             } catch (err) {
                 if (err.name === 'ServerStatusCodeError') return false;

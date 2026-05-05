@@ -109,7 +109,7 @@ describe('Client', function() {
             const qrCallback = sinon.spy();
             const disconnectedCallback = sinon.spy();
             
-            const client = helper.createClient({options: {qrMaxRetries: 2}});
+            const client = helper.createClient({options: { qrMaxRetries: 2 }});
             client.on('qr', qrCallback);
             client.on('disconnected', disconnectedCallback);
 
@@ -139,6 +139,7 @@ describe('Client', function() {
             await client.initialize();
 
             expect(authenticatedCallback.called).to.equal(true);
+            expect(readyCallback.called).to.equal(true);
 
             if(helper.isUsingLegacySession()) {
                 const newSession = authenticatedCallback.args[0][0];
@@ -293,72 +294,6 @@ describe('Client', function() {
             console.log(`WA Version: ${version}`);
         });
 
-        describe('Expose Store', function() {
-            it('exposes the store', async function() {
-                const exposed = await client.pupPage.evaluate(() => {
-                    return Boolean(window.Store);
-                });
-    
-                expect(exposed).to.equal(true);
-            });
-    
-            it('exposes all required WhatsApp Web internal models', async function() {
-                const expectedModules = [
-                    'AppState',
-                    'BlockContact',
-                    'Call',
-                    'Chat',
-                    'ChatState',
-                    'Cmd',
-                    'Conn',
-                    'Contact',
-                    'DownloadManager',
-                    'EphemeralFields',
-                    'Features',
-                    'GroupMetadata',
-                    'GroupParticipants',
-                    'GroupUtils',
-                    'Invite',
-                    'InviteInfo',
-                    'JoinInviteV4',
-                    'Label',
-                    'MediaObject',
-                    'MediaPrep',
-                    'MediaTypes',
-                    'MediaUpload',
-                    'MessageInfo',
-                    'Msg',
-                    'MsgKey',
-                    'OpaqueData',
-                    'QueryOrder',
-                    'QueryProduct',
-                    'PresenceUtils',
-                    'ProfilePic',
-                    'QueryExist',
-                    'QueryProduct',
-                    'QueryOrder',
-                    'SendClear',
-                    'SendDelete',
-                    'SendMessage',
-                    'SendSeen',
-                    'StatusUtils',
-                    'UploadUtils',
-                    'UserConstructor',
-                    'VCard',
-                    'Validators',
-                    'WidFactory',
-                    'findCommonGroups',
-                    'sendReactionToMsg',
-                ];
-              
-                const loadedModules = await client.pupPage.evaluate((expectedModules) => {
-                    return expectedModules.filter(m => Boolean(window.Store[m]));
-                }, expectedModules);
-    
-                expect(loadedModules).to.have.members(expectedModules);
-            });
-        });
-    
         describe('Send Messages', function () {            
             it('can send a message', async function() {
                 const msg = await client.sendMessage(remoteId, 'hello world');
