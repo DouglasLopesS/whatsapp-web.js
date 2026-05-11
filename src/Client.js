@@ -702,11 +702,20 @@ class Client extends EventEmitter {
         await exposeFunctionIfAbsent(this.pupPage, 'onAddMessageCiphertextEvent', msg => {
                 
             /**
-                 * Emitted when messages are edited
+                 * Emitted when a message is received as ciphertext (not yet decrypted)
                  * @event Client#message_ciphertext
                  * @param {Message} message
                  */
             this.emit(Events.MESSAGE_CIPHERTEXT, new Message(this, msg));
+        });
+
+        await exposeFunctionIfAbsent(this.pupPage, 'onCiphertextFailedEvent', msg => {
+            /**
+                 * Emitted when a ciphertext message failed to decrypt after recovery attempt
+                 * @event Client#message_ciphertext_failed
+                 * @param {Message} message
+                 */
+            this.emit(Events.MESSAGE_CIPHERTEXT_FAILED, new Message(this, msg));
         });
 
         await exposeFunctionIfAbsent(this.pupPage, 'onPollVoteEvent', (votes) => {
@@ -726,8 +735,32 @@ class Client extends EventEmitter {
                 return;
             }
 
+            if (typeof window.require === 'function') {
+                const gatingUtils = window.require('WAWebSyncGatingUtils');
+                if (gatingUtils) {
+                    gatingUtils.isPlaceholderMessageResendEnabled = () => true;
+                }
+            }
+
             // Message event listeners
             if (window.Store.Msg) {
+                const pendingResend = new Set();
+                let resendFlush = null;
+
+                function requestResend(msg) {
+                    pendingResend.add(msg);
+                    if (resendFlush) return;
+                    resendFlush = setTimeout(() => {
+                        resendFlush = null;
+                        const msgs = [...pendingResend];
+                        pendingResend.clear();
+                        if (msgs.length === 0 || typeof window.require !== 'function') return;
+                        window.require(
+                            'WAWebNonMessageDataRequestPlaceholderMessageResendUtils'
+                        ).handlePlaceholderMsgsSeen(msgs, true);
+                    }, 5000);
+                }
+
                 window.Store.Msg.on('change', (msg) => { window.onChangeMessageEvent(window.WWebJS.getMessageModel(msg)); });
                 window.Store.Msg.on('change:type', (msg) => { window.onChangeMessageTypeEvent(window.WWebJS.getMessageModel(msg)); });
                 window.Store.Msg.on('change:ack', (msg, ack) => { window.onMessageAckEvent(window.WWebJS.getMessageModel(msg), ack); });
@@ -735,15 +768,30 @@ class Client extends EventEmitter {
                 window.Store.Msg.on('remove', (msg) => { if (msg.isNewMsg) window.onRemoveMessageEvent(window.WWebJS.getMessageModel(msg)); });
                 window.Store.Msg.on('change:body change:caption', (msg, newBody, prevBody) => { window.onEditMessageEvent(window.WWebJS.getMessageModel(msg), newBody, prevBody); });
                 window.Store.Msg.on('add', (msg) => {
-                    if (msg.isNewMsg) {
-                        if(msg.type === 'ciphertext') {
-                            // defer message event until ciphertext is resolved (type changed)
-                            msg.once('change:type', (_msg) => window.onAddMessageEvent(window.WWebJS.getMessageModel(_msg)));
-                            window.onAddMessageCiphertextEvent(window.WWebJS.getMessageModel(msg));
-                        } else {
-                            window.onAddMessageEvent(window.WWebJS.getMessageModel(msg));
-                        }
+                    if (!msg.isNewMsg) return;
+
+                    if (msg.type !== 'ciphertext') {
+                        window.onAddMessageEvent(window.WWebJS.getMessageModel(msg));
+                        return;
                     }
+
+                    window.onAddMessageCiphertextEvent(window.WWebJS.getMessageModel(msg));
+
+                    if (msg.subtype && msg.subtype.endsWith('_unavailable_fanout')) return;
+
+                    requestResend(msg);
+
+                    const failTimer = setTimeout(() => {
+                        if (msg.type !== 'ciphertext') return;
+                        window.onCiphertextFailedEvent(window.WWebJS.getMessageModel(msg));
+                    }, 15000);
+
+                    msg.once('change:type', (_msg) => {
+                        clearTimeout(failTimer);
+                        pendingResend.delete(_msg);
+                        if (_msg.type === 'revoked') return;
+                        window.onAddMessageEvent(window.WWebJS.getMessageModel(_msg));
+                    });
                 });
             }
 
